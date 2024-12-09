@@ -2,6 +2,7 @@
 <html>
     <head>
         <title>Camera Access</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
             .container {
                 max-width: 800px;
@@ -33,11 +34,19 @@
             .button.stop {
                 background-color: #f44336;
             }
+            .camera-select {
+                margin: 10px 0;
+                padding: 8px;
+                border-radius: 4px;
+            }
         </style>
     </head>
     <body>
         <div class="container">
             <h1>Camera Access</h1>
+            <select id="cameraSelect" class="camera-select">
+                <option value="">Loading cameras...</option>
+            </select>
             <video id="video" autoplay></video>
             <canvas id="canvas"></canvas>
             <div>
@@ -51,7 +60,27 @@
             const canvas = document.getElementById('canvas');
             const startButton = document.getElementById('startButton');
             const detectButton = document.getElementById('detectButton');
+            const cameraSelect = document.getElementById('cameraSelect');
             let stream = null;
+
+            // Function to enumerate available cameras
+            async function getCameraDevices() {
+                try {
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    const videoDevices = devices.filter(device => device.kind === 'videoinput');
+                    
+                    // Clear and update camera select options
+                    cameraSelect.innerHTML = '';
+                    videoDevices.forEach((device, index) => {
+                        const option = document.createElement('option');
+                        option.value = device.deviceId;
+                        option.text = device.label || `Camera ${index + 1}`;
+                        cameraSelect.appendChild(option);
+                    });
+                } catch (err) {
+                    console.error('Error getting camera devices:', err);
+                }
+            }
 
             const updateButtonState = (streaming) => {
                 if (streaming) {
@@ -78,20 +107,41 @@
 
             const startStream = async () => {
                 try {
+                    const constraints = {
+                        video: {
+                            deviceId: cameraSelect.value ? { exact: cameraSelect.value } : undefined,
+                            facingMode: 'environment' // Prefer back camera on mobile
+                        }
+                    };
+
                     stream = await navigator.mediaDevices.getUserMedia({
                         video: true
                     });
                     video.srcObject = stream;
                     updateButtonState(true);
+
+                    // If we don't have camera labels, we need to request permission first
+                    if (!cameraSelect.options[0].text || cameraSelect.options[0].text === 'Loading cameras...') {
+                        await getCameraDevices();
+                    }
+
                 } catch (err) {
-                    if (err.name !== 'NotAllowedError') {
-                        alert('Error accessing camera. Please ensure you have given camera permission.');
+                    console.error('Camera error:', err);
+                    if (err.name === 'NotAllowedError') {
+                        alert('Camera access denied. Please grant camera permission.');
+                    } else if (err.name === 'NotFoundError') {
+                        alert('No camera found. Please check your camera connection.');
                     } else {
-                        alert('Error accessing camera. Please check you camera connection.');
+                        alert('Error accessing camera: ' + err.message);
                     }
                     stopStream();
                 }
             };
+
+            // Initialize camera list
+            navigator.mediaDevices.enumerateDevices()
+                .then(getCameraDevices)
+                .catch(err => console.error('Error initializing cameras:', err));
 
             startButton.addEventListener('click', () => {
                 if (stream) {
@@ -100,6 +150,14 @@
                     startStream();
                 }
             });
+
+            // Handle camera selection change
+            cameraSelect.addEventListener('change', () => {
+                if (stream) {
+                    stopStream();
+                    startStream();
+                }
+            });            
 
             // Cleanup when page is unloaded (closed or refreshed)
             window.addEventListener('beforeunload', stopStream);
