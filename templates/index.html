@@ -100,6 +100,19 @@
                     startStream();
                 }
             });
+
+            // Cleanup when page is unloaded (closed or refreshed)
+            window.addEventListener('beforeunload', stopStream);
+            
+            // Cleanup when page visibility changes (tab switched, minimized)
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) {
+                    stopStream();
+                }
+            });
+
+            // Cleanup when page is about to be discarded
+            document.addEventListener('freeze', stopStream);
         </script>
     </body>
 </html>
