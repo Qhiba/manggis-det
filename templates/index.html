@@ -42,27 +42,38 @@
             <canvas id="canvas"></canvas>
             <div>
                 <button id="startButton" class="button">Start Camera</button>
+                <button id="detectButton" class="button" disabled>Detect Objects</button>
             </div>
         </div>
 
         <script>
-            const video = document.getElementById('video')
-            const canvas = document.getElementById('canvas')
-            const startButton = document.getElementById('startButton')
+            const video = document.getElementById('video');
+            const canvas = document.getElementById('canvas');
+            const startButton = document.getElementById('startButton');
+            const detectButton = document.getElementById('detectButton');
             let stream = null;
-            let isStreaming = false;
+
+            const updateButtonState = (streaming) => {
+                if (streaming) {
+                    startButton.textContent = 'Stop Camera';
+                    startButton.classList.add('stop');
+                    detectButton.disabled = false;
+                } else {
+                    startButton.textContent = 'Start Camera';
+                    startButton.classList.remove('stop');
+                    detectButton.disabled = true;
+                }
+            }
 
             const stopStream = () => {
                 if (stream) {
-                    stream.getTrack().forEach(track => {
-                        track.stop()
+                    stream.getTracks().forEach(track => {
+                        track.stop();
                     });
                     video.srcObject = null;
                     stream = null;
+                    updateButtonState(false);
                 }
-                isStreaming = false;
-                startButton.textContent = 'Start Camera';
-                startButton.classList.remove('stop');
             };
 
             const startStream = async () => {
@@ -71,18 +82,19 @@
                         video: true
                     });
                     video.srcObject = stream;
-                    isStreaming = true;
-                    start.textContent = 'Stop Camera';
-                    startButton.classList.add('stop')
+                    updateButtonState(true);
                 } catch (err) {
-                    console.error('Error accessing camera:', err);
-                    alert('Error accessing camera. Please ensure you have given camera permission.');
+                    if (err.name !== 'NotAllowedError') {
+                        alert('Error accessing camera. Please ensure you have given camera permission.');
+                    } else {
+                        alert('Error accessing camera. Please check you camera connection.');
+                    }
                     stopStream();
                 }
             };
 
             startButton.addEventListener('click', () => {
-                if (isStreaming) {
+                if (stream) {
                     stopStream();
                 } else {
                     startStream();
