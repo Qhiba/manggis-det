@@ -67,6 +67,7 @@
             const cameraSelect = document.getElementById('cameraSelect');
             let stream = null;
             let detectionInterval = null;
+            let isDetecting = false;
 
             // Function to enumerate available cameras
             async function getCameraDevices() {
@@ -115,9 +116,33 @@
                     });
                     video.srcObject = null;
                     stream = null;
+
+                    if (detectionInterval) {
+                        clearInterval(detectionInterval);
+                        detectionInterval = null;
+                        detectButton.textContent = 'Start Detection'
+                        detectButton.classList.remove('stop');
+                        canvas.style.display = 'none';
+                        video.style.display = 'block';
+                    }
+
                     updateButtonState(false);
                 }
             };
+
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) {
+                    if (detectionInterval) {
+                        clearInterval(detectionInterval);
+                        detectionInterval = null;
+                        detectButton.textContent = 'Start Detection';
+                        detectButton.classList.remove('stop');
+                        canvas.style.display = 'none';
+                        video.style.display = 'block';
+                    }
+                    stopStream();
+                }
+            })
 
             const startStream = async () => {
                 try {
@@ -181,11 +206,11 @@
                     const height = y2 - y1
 
                     //Draw bounding box
-                    ctx.strokesStyle = '#00ff00';
+                    ctx.strokeStyle = '#00ff00';
                     ctx.strokeRect(x1, y1, width, height);
 
                     // Draw Label Background
-                    const label = '${detections.class} ${Math.round(detection.confidence * 100)}%';
+                    const label = `${detection.class} ${Math.round(detection.confidence * 100)}%`;
                     const labelWidth = ctx.measureText(label).width;
                     ctx.fillStyle = '#00ff00';
                     ctx.fillRect(x1, y1 - 20, labelWidth + 10, 20);
@@ -197,7 +222,7 @@
             };
 
             const detectObjects = async () => {
-                if (!stream) return;
+                if (!stream || !isDetecting) return;
 
                 // Set Canvas size to match video
                 canvas.width = video.videoWidth;
@@ -207,10 +232,10 @@
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
 
                 // Get canvas data as base64
-                const imageData = canvas.toDataUrl('image/jpeg');
+                const imageData = canvas.toDataURL('image/jpeg');
 
                 try{
-                    const response = await fetch('https://localhost:5000/detect', {
+                    const response = await fetch('http://localhost:5000/detect', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
@@ -234,6 +259,7 @@
             detectButton.addEventListener('click', () => {
                 if (detectionInterval) {
                     // Stop detection
+                    isDetecting = false
                     clearInterval(detectionInterval);
                     detectionInterval = null;
                     detectButton.textContent = 'Start Detection';
@@ -242,6 +268,7 @@
                     video.style.display = 'block';
                 } else {
                     // Start detection
+                    isDetecting = true
                     canvas.style.display = 'block';
                     video.style.display = 'none';
                     detectButton.textContent = 'Stop Detection';
