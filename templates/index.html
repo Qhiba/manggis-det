@@ -17,6 +17,9 @@
             }
             #canvas {
                 display: none;
+                width: 100%;
+                max-width: 640px;
+                margin-bottom: 20px;
             }
             .button {
                 padding: 10px 20px;
@@ -58,10 +61,12 @@
         <script>
             const video = document.getElementById('video');
             const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
             const startButton = document.getElementById('startButton');
             const detectButton = document.getElementById('detectButton');
             const cameraSelect = document.getElementById('cameraSelect');
             let stream = null;
+            let detectionInterval = null;
 
             // Function to enumerate available cameras
             async function getCameraDevices() {
@@ -91,6 +96,15 @@
                     startButton.textContent = 'Start Camera';
                     startButton.classList.remove('stop');
                     detectButton.disabled = true;
+                    // Also stop detection if it's running
+                    if (detectionInterval) {
+                        clearInterval(detectionInterval);
+                        detectionInterval = null;
+                        detectButton.textContent = 'Start Detection';
+                        detectButton.classList.remove('stop');
+                        canvas.style.display = 'none';
+                        video.style.display = 'block';
+                    }
                 }
             }
 
@@ -157,7 +171,86 @@
                     stopStream();
                     startStream();
                 }
-            });            
+            });    
+            
+            const drawDetections = (detections, videoWidth, videoHeight) => {
+                ctx.lineWidth = 2;
+                ctx.font = '16px Arial';
+
+                detections.forEach(detection => {
+                    const [x1, y1, x2, y2] = detection.bbox;
+                    const width = x2 - x1
+                    const height = y2 - y1
+
+                    //Draw bounding box
+                    ctx.strokesStyle = '#00ff00';
+                    ctx.strokeRect(x1, y1, width, height);
+
+                    // Draw Label Background
+                    const label = '${detections.class} ${Math.round(detection.confidence * 100)}%';
+                    const labelWidth = ctx.measureText(label).width;
+                    ctx.fillStyle = '#00ff00';
+                    ctx.fillRect(x1, y1 - 20, labelWidth + 10, 20);
+
+                    // Draw label text
+                    ctx.fillStyle = '#000000';
+                    ctx.fillText(label, x1 + 5, y1 - 5);
+                });
+            };
+
+            const detectObjects = async () => {
+                if (!stream) return;
+
+                // Set Canvas size to match video
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+
+                // Draw current video frame to canvas
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+                // Get canvas data as base64
+                const imageData = canvas.toDataUrl('image/jpeg');
+
+                try{
+                    const response = await fetch('https://localhost:5000/detect', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ image: imageData })
+                    });
+
+                    const result = await response.json();
+                    if (result.success) {
+                        // Clear canvas and redraw video frame
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                        // Draw detections
+                        drawDetections(result.detections, canvas.width, canvas.height);
+                    }
+                } catch (error) {
+                    console.error('Detection error: ', error);
+                }
+            };
+
+            detectButton.addEventListener('click', () => {
+                if (detectionInterval) {
+                    // Stop detection
+                    clearInterval(detectionInterval);
+                    detectionInterval = null;
+                    detectButton.textContent = 'Start Detection';
+                    detectButton.classList.remove('stop');
+                    canvas.style.display = 'none';
+                    video.style.display = 'block';
+                } else {
+                    // Start detection
+                    canvas.style.display = 'block';
+                    video.style.display = 'none';
+                    detectButton.textContent = 'Stop Detection';
+                    detectButton.classList.add('stop');
+                    detectionInterval = setInterval(detectObjects, 100);
+                }
+            });
 
             // Cleanup when page is unloaded (closed or refreshed)
             window.addEventListener('beforeunload', stopStream);
