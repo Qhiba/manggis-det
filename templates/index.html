@@ -50,7 +50,7 @@
             <select id="cameraSelect" class="camera-select">
                 <option value="">Loading cameras...</option>
             </select>
-            <video id="video" autoplay></video>
+            <video id="video" autoplay playisinline></video>
             <canvas id="canvas"></canvas>
             <div>
                 <button id="startButton" class="button">Start Camera</button>
@@ -124,13 +124,11 @@
                     const constraints = {
                         video: {
                             deviceId: cameraSelect.value ? { exact: cameraSelect.value } : undefined,
-                            facingMode: 'environment' // Prefer back camera on mobile
+                            facingMode: cameraSelect.value ? undefined : 'environment' // Prefer back camera on mobile
                         }
                     };
 
-                    stream = await navigator.mediaDevices.getUserMedia({
-                        video: true
-                    });
+                    stream = await navigator.mediaDevices.getUserMedia(constraints);
                     video.srcObject = stream;
                     updateButtonState(true);
 
